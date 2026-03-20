@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pinance</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1 class="logo">Pinance</h1>
+    <div class="import-buttons">
+      <label class="btn">
+        <span class="btn-full">銀行CSV読込</span>
+        <span class="btn-short">銀行</span>
+        <input type="file" id="bank-file-input" accept=".csv" hidden>
+      </label>
+      <label class="btn">
+        <span class="btn-full">カードCSV読込</span>
+        <span class="btn-short">カード</span>
+        <input type="file" id="card-file-input" accept=".csv" hidden>
+      </label>
+    </div>
+  </header>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <div class="period-nav">
+    <select id="period-select">
+      <option value="all">全て</option>
+      <option value="month" selected>月</option>
+      <option value="year">年</option>
+      <option value="week">週</option>
+      <option value="day">日</option>
+    </select>
+    <button id="prev-btn">&#8249;</button>
+    <span id="period-label"></span>
+    <button id="next-btn">&#8250;</button>
+  </div>
+
+  <div id="chart-section" class="chart-section">
+    <div class="chart-toggle">
+      <button class="chart-btn active" data-chart="bar">収入・支出</button>
+      <button class="chart-btn" data-chart="net">収支差額</button>
+      <button class="chart-btn" data-chart="balance">残高推移</button>
+    </div>
+    <div id="chart-container"></div>
+  </div>
+
+  <div id="summary-cards" class="summary-cards hidden">
+    <div class="summary-card">
+      <div class="summary-label">収入合計</div>
+      <div class="summary-value deposit" id="summary-deposit">—</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">支出合計</div>
+      <div class="summary-value withdrawal" id="summary-withdrawal">—</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">差引</div>
+      <div class="summary-value net" id="summary-net">—</div>
+    </div>
+  </div>
+
+  <div class="table-container">
+    <div id="bank-panel">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th class="col-amount text-right">引出し</th>
+            <th class="col-amount text-right">預入れ</th>
+            <th>内容</th>
+            <th class="text-right">残高</th>
+          </tr>
+        </thead>
+        <tbody id="bank-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

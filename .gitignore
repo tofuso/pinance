@@ -1,0 +1,12 @@
+.venv
+.vscode
+.claude
+/.superpowers
+/.pytest_cache
+# キャッシュ・ビルド成果物
+__pycache__/
+*.db
+# データのcommitへの混入防止
+/csv
+/private
+/data

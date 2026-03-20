@@ -8,6 +8,12 @@ SAMPLE_CSV = """\ufeff田中　太郎　様,4990-06**-****-****,ダミー銀行�
 2026/3/15,ＮｅｗＤａｙｓ・ＫＩＯＳＫ  世田谷店,291,1,1,291,,,,,
 """
 
+SAMPLE_CSV_TWO_MONTHS = (
+    "\ufeff田中　太郎　様,4990-06**-****-****,ダミー銀行カードＶＩＳＡ（EEEE）,,,,,,,,\n"
+    "2026/3/16,ダミースーパー 世田谷店,1726,1,1,1726,,,,,\n"
+    "2026/2/10,コンビニ 渋谷店,500,1,1,500,,,,,\n"
+)
+
 @pytest.fixture
 def client(tmp_path):
     db_path = str(tmp_path / "test.db")
@@ -46,3 +52,72 @@ def test_get_card_transactions_by_month(client):
     data = response.json()
     assert len(data["transactions"]) == 3
     assert data["period_label"] == "2026年3月"
+
+def test_get_card_months_empty(client):
+    res = client.get("/api/card/months")
+    assert res.status_code == 200
+    assert res.json() == []
+
+def test_get_card_months_returns_unique_months(client):
+    files = {"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    res = client.get("/api/card/months")
+    assert res.status_code == 200
+    data = res.json()
+    assert "2026-03" in data
+    assert data == sorted(data)  # 昇順
+
+def test_delete_card_transactions_all(client):
+    files = {"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    res = client.delete("/api/card/transactions")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 3
+    res2 = client.get("/api/card/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 0
+
+def test_delete_card_transactions_all_when_empty(client):
+    res = client.delete("/api/card/transactions")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+
+def test_delete_card_transactions_by_month(client):
+    files = {"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    res = client.delete("/api/card/transactions?year_month=2026-03")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 3
+    res2 = client.get("/api/card/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 0
+
+def test_delete_card_transactions_by_month_when_no_match(client):
+    files = {"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    res = client.delete("/api/card/transactions?year_month=2023-01")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+
+def test_delete_card_transactions_invalid_year_month_returns_400(client):
+    res = client.delete("/api/card/transactions?year_month=invalid")
+    assert res.status_code == 400
+
+def test_delete_card_and_reimport(client):
+    """削除後に同じCSVを再インポートできること"""
+    files = {"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    client.delete("/api/card/transactions")
+    res = client.post("/api/card/import",
+        files={"file": ("card.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")})
+    assert res.status_code == 200
+    assert res.json()["imported"] == 3
+
+def test_delete_card_transactions_by_month_only_deletes_target(client):
+    files = {"file": ("card.csv", SAMPLE_CSV_TWO_MONTHS.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/card/import", files=files)
+    res = client.delete("/api/card/transactions?year_month=2026-03")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 1
+    # 2026-02のデータはDBに残っていること
+    res2 = client.get("/api/card/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 1
+    assert res2.json()["transactions"][0]["date"] == "2026-02-10"

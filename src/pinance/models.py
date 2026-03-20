@@ -38,3 +38,6 @@ class ChartData(BaseModel):
     withdrawals: list[int]
     nets: list[int]
     balances: list[int]
+
+class DeleteResponse(BaseModel):
+    deleted: int

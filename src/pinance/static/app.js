@@ -247,7 +247,45 @@ async function importCsv(endpoint, file) {
   } else {
     showToast(`${data.imported}件インポート、${data.skipped}件スキップ`);
     loadAll();
+    refreshModalMonths();
   }
+}
+
+function formatYearMonth(ym) {
+  const [y, m] = ym.split('-');
+  return `${y}年${parseInt(m, 10)}月`;
+}
+
+async function refreshModalMonths() {
+  const [bankRes, cardRes] = await Promise.all([
+    fetch('/api/bank/months'),
+    fetch('/api/card/months'),
+  ]);
+  const bankMonths = bankRes.ok ? await bankRes.json() : [];
+  const cardMonths = cardRes.ok ? await cardRes.json() : [];
+
+  function populateSelect(selectId, deleteBtnId, months) {
+    const sel = document.getElementById(selectId);
+    const btn = document.getElementById(deleteBtnId);
+    sel.innerHTML = '';
+    if (months.length === 0) {
+      sel.innerHTML = '<option value="">（データなし）</option>';
+      sel.disabled = true;
+      btn.disabled = true;
+    } else {
+      months.forEach(ym => {
+        const opt = document.createElement('option');
+        opt.value = ym;
+        opt.textContent = formatYearMonth(ym);
+        sel.appendChild(opt);
+      });
+      sel.disabled = false;
+      btn.disabled = false;
+    }
+  }
+
+  populateSelect('bank-month-select', 'bank-delete-month-btn', bankMonths);
+  populateSelect('card-month-select', 'card-delete-month-btn', cardMonths);
 }
 
 // イベントリスナー
@@ -290,6 +328,57 @@ document.querySelectorAll('.chart-btn').forEach(btn => {
 
 window.addEventListener('resize', () => {
   if (chartInstance) chartInstance.resize();
+});
+
+// 設定モーダル
+const settingsModal = document.getElementById('settings-modal');
+
+document.getElementById('settings-btn').addEventListener('click', () => {
+  settingsModal.classList.remove('hidden');
+  refreshModalMonths();
+});
+
+document.getElementById('modal-close-btn').addEventListener('click', () => {
+  settingsModal.classList.add('hidden');
+});
+
+settingsModal.addEventListener('click', e => {
+  if (e.target === settingsModal) settingsModal.classList.add('hidden');
+});
+
+async function deleteData(endpoint) {
+  const res = await fetch(endpoint, { method: 'DELETE' });
+  if (!res.ok) { showToast('削除に失敗しました', true); return; }
+  const data = await res.json();
+  if (data.deleted === 0) {
+    showToast('削除するデータがありません');
+  } else {
+    showToast(`${data.deleted}件削除しました`);
+    loadAll();
+  }
+  refreshModalMonths();
+}
+
+document.getElementById('bank-delete-month-btn').addEventListener('click', async () => {
+  const ym = document.getElementById('bank-month-select').value;
+  if (!ym) return;
+  await deleteData(`/api/bank/transactions?year_month=${ym}`);
+});
+
+document.getElementById('bank-delete-all-btn').addEventListener('click', async () => {
+  if (!confirm('銀行取引データを全件削除しますか？')) return;
+  await deleteData('/api/bank/transactions');
+});
+
+document.getElementById('card-delete-month-btn').addEventListener('click', async () => {
+  const ym = document.getElementById('card-month-select').value;
+  if (!ym) return;
+  await deleteData(`/api/card/transactions?year_month=${ym}`);
+});
+
+document.getElementById('card-delete-all-btn').addEventListener('click', async () => {
+  if (!confirm('カード取引データを全件削除しますか？')) return;
+  await deleteData('/api/card/transactions');
 });
 
 // 初期ロード

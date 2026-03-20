@@ -180,3 +180,79 @@ def test_get_chart_data_balance_forward_fill(client):
     assert august_balance > 0
     assert data["balances"][8] == august_balance
     assert data["balances"][11] == august_balance
+
+# 複数月データ（2024-07 と 2024-08 が混在）
+SAMPLE_CSV_TWO_MONTHS = (
+    "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n"
+    "2024/8/27,34291,,ﾔﾁﾝ,1652809\n"
+    "2024/7/15,,100000,給料振込,1500000\n"
+)
+
+def test_get_bank_months_empty(client):
+    res = client.get("/api/bank/months")
+    assert res.status_code == 200
+    assert res.json() == []
+
+def test_get_bank_months_returns_unique_months(client):
+    files = {"file": ("test.csv", SAMPLE_CSV_TWO_MONTHS.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    res = client.get("/api/bank/months")
+    assert res.status_code == 200
+    data = res.json()
+    assert data == ["2024-07", "2024-08"]  # 昇順・重複なし
+
+def test_delete_bank_transactions_all(client):
+    files = {"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    res = client.delete("/api/bank/transactions")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 2
+    # 削除後は空になっていること
+    res2 = client.get("/api/bank/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 0
+
+def test_delete_bank_transactions_all_when_empty(client):
+    res = client.delete("/api/bank/transactions")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+
+def test_delete_bank_transactions_by_month(client):
+    files = {"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    res = client.delete("/api/bank/transactions?year_month=2024-08")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 2
+    res2 = client.get("/api/bank/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 0
+
+def test_delete_bank_transactions_by_month_only_deletes_target(client):
+    files = {"file": ("test.csv", SAMPLE_CSV_TWO_MONTHS.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    res = client.delete("/api/bank/transactions?year_month=2024-08")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 1
+    # 2024-07のデータはDBに残っていること
+    res2 = client.get("/api/bank/transactions?period=all")
+    assert len(res2.json()["transactions"]) == 1
+    assert res2.json()["transactions"][0]["date"] == "2024-07-15"
+
+def test_delete_bank_transactions_by_month_when_no_match(client):
+    files = {"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    res = client.delete("/api/bank/transactions?year_month=2023-01")
+    assert res.status_code == 200
+    assert res.json()["deleted"] == 0
+
+def test_delete_bank_transactions_invalid_year_month_returns_400(client):
+    res = client.delete("/api/bank/transactions?year_month=invalid")
+    assert res.status_code == 400
+
+def test_delete_bank_and_reimport(client):
+    """削除後に同じCSVを再インポートできること"""
+    files = {"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")}
+    client.post("/api/bank/import", files=files)
+    client.delete("/api/bank/transactions")
+    res = client.post("/api/bank/import",
+        files={"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")})
+    assert res.status_code == 200
+    assert res.json()["imported"] == 2

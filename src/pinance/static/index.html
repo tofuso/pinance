@@ -21,7 +21,43 @@
         <input type="file" id="card-file-input" accept=".csv" hidden>
       </label>
     </div>
+    <button id="settings-btn" class="btn btn-icon" title="データ管理">⚙</button>
   </header>
+
+  <div id="settings-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>データ管理</h2>
+        <button id="modal-close-btn" class="modal-close">✕</button>
+      </div>
+      <div class="modal-body">
+        <section class="modal-section">
+          <h3>銀行取引</h3>
+          <div class="modal-row">
+            <select id="bank-month-select" disabled>
+              <option value="">（データなし）</option>
+            </select>
+            <button id="bank-delete-month-btn" class="btn btn-danger-outline" disabled>選択月を削除</button>
+          </div>
+          <div class="modal-row">
+            <button id="bank-delete-all-btn" class="btn btn-danger">全件削除</button>
+          </div>
+        </section>
+        <section class="modal-section">
+          <h3>カード取引</h3>
+          <div class="modal-row">
+            <select id="card-month-select" disabled>
+              <option value="">（データなし）</option>
+            </select>
+            <button id="card-delete-month-btn" class="btn btn-danger-outline" disabled>選択月を削除</button>
+          </div>
+          <div class="modal-row">
+            <button id="card-delete-all-btn" class="btn btn-danger">全件削除</button>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast hidden"></div>
 

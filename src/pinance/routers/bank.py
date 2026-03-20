@@ -1,4 +1,5 @@
 import io
+import re
 import sqlite3
 import calendar
 from datetime import datetime, timedelta
@@ -6,7 +7,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pinance.models import (
     BankTransactionsResponse, BankTransaction,
     CardTransactionsResponse, CardTransaction,
-    ImportResponse, BankSummary, ChartData,
+    ImportResponse, BankSummary, ChartData, DeleteResponse,
 )
 from pinance.parsers.smbc import parse_smbc_csv
 from pinance.utils import decode_csv_bytes
@@ -249,5 +250,39 @@ def make_bank_router(db_path: str):
             period_label=_make_period_label("month", year_month),
             transactions=transactions,
         )
+
+    @router.get("/months", response_model=list[str])
+    def get_months():
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT DISTINCT substr(date, 1, 7) AS ym FROM bank_transactions ORDER BY ym ASC"
+            ).fetchall()
+        finally:
+            conn.close()
+        return [row["ym"] for row in rows]
+
+    @router.delete("/transactions", response_model=DeleteResponse)
+    def delete_transactions(year_month: str | None = None):
+        if year_month is not None and not re.fullmatch(r"\d{4}-\d{2}", year_month):
+            raise HTTPException(status_code=400, detail="year_monthはYYYY-MM形式で指定してください")
+        conn = sqlite3.connect(db_path)
+        try:
+            if year_month:
+                cursor = conn.execute(
+                    "DELETE FROM bank_transactions WHERE date LIKE ?",
+                    [f"{year_month}-%"],
+                )
+            else:
+                cursor = conn.execute("DELETE FROM bank_transactions")
+            conn.commit()
+            deleted = cursor.rowcount
+        except Exception:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail="データベースエラー")
+        finally:
+            conn.close()
+        return DeleteResponse(deleted=deleted)
 
     return router

@@ -207,7 +207,7 @@ INSERT OR IGNORE INTO category_rules (keyword, category_id, target)
 
 ### 新規タブ構成
 
-既存の `index.html` に以下のタブを追加する（Chart.js を継続使用）。
+既存の `index.html` に以下のタブを追加する（ECharts 5 を継続使用）。
 
 #### ① 分析タブ
 

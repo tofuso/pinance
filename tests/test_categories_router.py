@@ -94,3 +94,32 @@ def test_delete_rule(client):
     assert res.status_code == 200
     keywords = [r["keyword"] for r in client.get("/api/categories/rules").json()]
     assert "イオン" not in keywords
+
+def test_create_rule_retroactively_classifies_bank(client):
+    """ルール追加後、既存の未分類銀行取引が遡及分類されること"""
+    SAMPLE = "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n2024/8/27,1000,,イオンモール,100000\n"
+    client.post("/api/bank/import", files={"file": ("b.csv", SAMPLE.encode("utf-8-sig"), "text/csv")})
+    tx = client.get("/api/bank/transactions?period=all").json()["transactions"][0]
+    assert tx["category_id"] is None  # インポート時は未分類
+
+    cat_id = client.post("/api/categories", json={"name": "食費", "type": "expense"}).json()["id"]
+    client.post("/api/categories/rules", json={"keyword": "イオン", "category_id": cat_id, "target": "bank"})
+
+    tx2 = client.get("/api/bank/transactions?period=all").json()["transactions"][0]
+    assert tx2["category_id"] == cat_id
+
+def test_create_rule_retroactively_classifies_card(client):
+    """ルール追加後、既存の未分類カード取引が遡及分類されること"""
+    CARD_CSV = (
+        "\ufeff田中　太郎　様,4990-06**-****-****,ダミーカード,,,,,,,,\n"
+        "2024/7/10,イオン,1500,1,1,1500,,,,,\n"
+    )
+    client.post("/api/card/import", files={"file": ("c.csv", CARD_CSV.encode("utf-8-sig"), "text/csv")})
+    tx = client.get("/api/card/transactions?period=all").json()["transactions"][0]
+    assert tx["category_id"] is None
+
+    cat_id = client.post("/api/categories", json={"name": "食費", "type": "expense"}).json()["id"]
+    client.post("/api/categories/rules", json={"keyword": "イオン", "category_id": cat_id, "target": "card"})
+
+    tx2 = client.get("/api/card/transactions?period=all").json()["transactions"][0]
+    assert tx2["category_id"] == cat_id

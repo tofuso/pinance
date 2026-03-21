@@ -122,6 +122,19 @@ def make_categories_router(db_path: str):
             conn.commit()
             rule_id = cursor.lastrowid
             category_name = cat["name"] if cat else None
+            # 既存の未分類トランザクションへ遡及適用
+            like_pattern = f"%{payload.keyword}%"
+            if payload.target in ("bank", "both"):
+                conn.execute(
+                    "UPDATE bank_transactions SET category_id = ? WHERE description LIKE ? AND category_id IS NULL",
+                    [payload.category_id, like_pattern],
+                )
+            if payload.target in ("card", "both"):
+                conn.execute(
+                    "UPDATE card_transactions SET category_id = ? WHERE merchant LIKE ? AND category_id IS NULL",
+                    [payload.category_id, like_pattern],
+                )
+            conn.commit()
         except sqlite3.IntegrityError:
             raise HTTPException(status_code=409, detail="同じキーワードと対象の組み合わせが既に存在します")
         finally:

@@ -394,10 +394,12 @@ loadAll();
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-panel').forEach(p => { p.classList.remove('active'); p.style.display = ''; });
+    document.querySelectorAll('.tab-panel').forEach(p => { p.classList.remove('active'); p.classList.add('hidden'); });
     btn.classList.add('active');
     const panel = document.getElementById('tab-' + btn.dataset.tab);
+    panel.classList.remove('hidden');
     panel.classList.add('active');
+    if (btn.dataset.tab === 'transactions') loadAll();
     if (btn.dataset.tab === 'analytics') loadAnalytics();
     if (btn.dataset.tab === 'categories') loadCategories();
   });

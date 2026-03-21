@@ -256,3 +256,58 @@ def test_delete_bank_and_reimport(client):
         files={"file": ("test.csv", SAMPLE_CSV.encode("utf-8-sig"), "text/csv")})
     assert res.status_code == 200
     assert res.json()["imported"] == 2
+
+SAMPLE_BANK_FOR_CLASSIFY = "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n2024/8/27,1000,,イオンモール,100000\n"
+
+def test_import_auto_classifies_by_rule(client):
+    """インポート時にルールでカテゴリが付与されること"""
+    cat_res = client.post("/api/categories", json={"name": "食費", "type": "expense"})
+    cat_id = cat_res.json()["id"]
+    client.post("/api/categories/rules", json={"keyword": "イオン", "category_id": cat_id, "target": "bank"})
+    client.post("/api/bank/import", files={"file": ("b.csv", SAMPLE_BANK_FOR_CLASSIFY.encode("utf-8-sig"), "text/csv")})
+    res = client.get("/api/bank/transactions?period=all")
+    tx = res.json()["transactions"][0]
+    assert tx["category_id"] == cat_id
+    assert tx["category_name"] == "食費"
+
+def test_import_unmatched_transaction_has_no_category(client):
+    """マッチするルールがない取引は category_id が None であること"""
+    client.post("/api/bank/import", files={"file": ("b.csv", SAMPLE_BANK_FOR_CLASSIFY.encode("utf-8-sig"), "text/csv")})
+    res = client.get("/api/bank/transactions?period=all")
+    assert res.json()["transactions"][0]["category_id"] is None
+
+def test_patch_bank_transaction_category(client):
+    """PATCH で手動カテゴリ変更できること"""
+    cat_res = client.post("/api/categories", json={"name": "食費", "type": "expense"})
+    cat_id = cat_res.json()["id"]
+    SAMPLE = "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n2024/8/27,1000,,スーパー,100000\n"
+    client.post("/api/bank/import", files={"file": ("b.csv", SAMPLE.encode("utf-8-sig"), "text/csv")})
+    tx_id = client.get("/api/bank/transactions?period=all").json()["transactions"][0]["id"]
+    res = client.patch(f"/api/bank/transactions/{tx_id}/category", json={"category_id": cat_id})
+    assert res.status_code == 200
+    tx = client.get("/api/bank/transactions?period=all").json()["transactions"][0]
+    assert tx["category_id"] == cat_id
+    assert tx["category_name"] == "食費"
+
+def test_patch_bank_transaction_category_clear(client):
+    """category_id: null で分類をクリアできること"""
+    cat_res = client.post("/api/categories", json={"name": "食費", "type": "expense"})
+    cat_id = cat_res.json()["id"]
+    SAMPLE = "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n2024/8/27,1000,,スーパー,100000\n"
+    client.post("/api/bank/import", files={"file": ("b.csv", SAMPLE.encode("utf-8-sig"), "text/csv")})
+    tx_id = client.get("/api/bank/transactions?period=all").json()["transactions"][0]["id"]
+    client.patch(f"/api/bank/transactions/{tx_id}/category", json={"category_id": cat_id})
+    res = client.patch(f"/api/bank/transactions/{tx_id}/category", json={"category_id": None})
+    assert res.status_code == 200
+    assert client.get("/api/bank/transactions?period=all").json()["transactions"][0]["category_id"] is None
+
+def test_patch_bank_transaction_category_not_found(client):
+    res = client.patch("/api/bank/transactions/9999/category", json={"category_id": None})
+    assert res.status_code == 404
+
+def test_bank_import_card_deduction_auto_excluded(client):
+    """カード引き落とし行がシードルールで自動的に exclude カテゴリに分類されること"""
+    CARD_CSV = "\ufeff年月日,お引出し,お預入れ,お取り扱い内容,残高\n2024/8/27,50000,,ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ (ｶ,100000\n"
+    client.post("/api/bank/import", files={"file": ("b.csv", CARD_CSV.encode("utf-8-sig"), "text/csv")})
+    tx = client.get("/api/bank/transactions?period=all").json()["transactions"][0]
+    assert tx["category_name"] == "カード引き落とし"

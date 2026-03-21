@@ -7,10 +7,11 @@ from fastapi import APIRouter, UploadFile, File, HTTPException
 from pinance.models import (
     BankTransactionsResponse, BankTransaction,
     CardTransactionsResponse, CardTransaction,
-    ImportResponse, BankSummary, ChartData, DeleteResponse,
+    ImportResponse, BankSummary, ChartData, DeleteResponse, CategoryPatch,
 )
 from pinance.parsers.smbc import parse_smbc_csv
 from pinance.utils import decode_csv_bytes
+from pinance.classifier import fetch_rules, classify_text
 
 def _make_period_label(period: str, date: str | None) -> str:
     if period == "all" or not date:
@@ -86,16 +87,20 @@ def make_bank_router(db_path: str):
             raise HTTPException(status_code=400, detail=f"不正なCSV形式です: {e}")
 
         conn = sqlite3.connect(db_path)
+        # fetch_rules は sqlite3.Row を前提とするため row_factory を設定する
+        conn.row_factory = sqlite3.Row
         imported = 0
         skipped = 0
         try:
+            rules = fetch_rules(conn)
             for row in rows:
+                cat_id = classify_text(row["description"], rules, "bank")
                 cursor = conn.execute(
                     """INSERT OR IGNORE INTO bank_transactions
-                       (date, withdrawal, deposit, description, balance)
-                       VALUES (?, ?, ?, ?, ?)""",
+                       (date, withdrawal, deposit, description, balance, category_id)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
                     (row["date"], row["withdrawal"], row["deposit"],
-                     row["description"], row["balance"]),
+                     row["description"], row["balance"], cat_id),
                 )
                 if cursor.rowcount == 1:
                     imported += 1
@@ -191,7 +196,13 @@ def make_bank_router(db_path: str):
     @router.get("/transactions", response_model=BankTransactionsResponse)
     def get_transactions(period: str = "all", date: str | None = None):
         where, params = _build_where_clause(period, date)
-        query = f"SELECT * FROM bank_transactions {where} ORDER BY date DESC, id DESC"
+        query = f"""
+            SELECT bt.*, c.name AS category_name
+            FROM bank_transactions bt
+            LEFT JOIN categories c ON bt.category_id = c.id
+            {where}
+            ORDER BY bt.date DESC, bt.id DESC
+        """
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
@@ -202,13 +213,43 @@ def make_bank_router(db_path: str):
         transactions = [
             BankTransaction(
                 id=r["id"], date=r["date"], withdrawal=r["withdrawal"],
-                deposit=r["deposit"], description=r["description"], balance=r["balance"]
+                deposit=r["deposit"], description=r["description"], balance=r["balance"],
+                category_id=r["category_id"],
+                category_name=r["category_name"],
             )
             for r in rows
         ]
         return BankTransactionsResponse(
             period_label=_make_period_label(period, date),
             transactions=transactions,
+        )
+
+    @router.patch("/transactions/{transaction_id}/category")
+    def set_transaction_category(transaction_id: int, payload: CategoryPatch):
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(
+                "UPDATE bank_transactions SET category_id = ? WHERE id = ?",
+                [payload.category_id, transaction_id],
+            )
+            conn.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="取引が見つかりません")
+            row = conn.execute(
+                """SELECT bt.*, c.name AS category_name
+                   FROM bank_transactions bt
+                   LEFT JOIN categories c ON bt.category_id = c.id
+                   WHERE bt.id = ?""",
+                [transaction_id],
+            ).fetchone()
+        finally:
+            conn.close()
+        return BankTransaction(
+            id=row["id"], date=row["date"], withdrawal=row["withdrawal"],
+            deposit=row["deposit"], description=row["description"], balance=row["balance"],
+            category_id=row["category_id"], category_name=row["category_name"],
         )
 
     @router.get("/transactions/{transaction_id}/card-details", response_model=CardTransactionsResponse)

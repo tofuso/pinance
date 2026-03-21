@@ -2,10 +2,11 @@ import io
 import re
 import sqlite3
 from fastapi import APIRouter, UploadFile, File, HTTPException
-from pinance.models import CardTransactionsResponse, CardTransaction, ImportResponse, DeleteResponse
+from pinance.models import CardTransactionsResponse, CardTransaction, ImportResponse, DeleteResponse, CategoryPatch
 from pinance.parsers.vpass import parse_vpass_csv
 from pinance.routers.bank import _build_where_clause, _make_period_label
 from pinance.utils import decode_csv_bytes
+from pinance.classifier import fetch_rules, classify_text
 
 def make_card_router(db_path: str):
     router = APIRouter(prefix="/api/card", tags=["card"])
@@ -22,15 +23,19 @@ def make_card_router(db_path: str):
             raise HTTPException(status_code=400, detail=f"不正なCSV形式です: {e}")
 
         conn = sqlite3.connect(db_path)
+        # fetch_rules は sqlite3.Row を前提とするため row_factory を設定する
+        conn.row_factory = sqlite3.Row
         imported = 0
         skipped = 0
         try:
+            rules = fetch_rules(conn)
             for row in rows:
+                cat_id = classify_text(row["merchant"], rules, "card")
                 cursor = conn.execute(
                     """INSERT OR IGNORE INTO card_transactions
-                       (date, merchant, amount, row_index)
-                       VALUES (?, ?, ?, ?)""",
-                    (row["date"], row["merchant"], row["amount"], row["row_index"]),
+                       (date, merchant, amount, row_index, category_id)
+                       VALUES (?, ?, ?, ?, ?)""",
+                    (row["date"], row["merchant"], row["amount"], row["row_index"], cat_id),
                 )
                 if cursor.rowcount == 1:
                     imported += 1
@@ -48,7 +53,13 @@ def make_card_router(db_path: str):
     @router.get("/transactions", response_model=CardTransactionsResponse)
     def get_transactions(period: str = "all", date: str | None = None):
         where, params = _build_where_clause(period, date)
-        query = f"SELECT * FROM card_transactions {where} ORDER BY date DESC, id DESC"
+        query = f"""
+            SELECT ct.*, c.name AS category_name
+            FROM card_transactions ct
+            LEFT JOIN categories c ON ct.category_id = c.id
+            {where}
+            ORDER BY ct.date DESC, ct.id DESC
+        """
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         try:
@@ -57,12 +68,43 @@ def make_card_router(db_path: str):
             conn.close()
 
         transactions = [
-            CardTransaction(id=r["id"], date=r["date"], merchant=r["merchant"], amount=r["amount"])
+            CardTransaction(
+                id=r["id"], date=r["date"], merchant=r["merchant"], amount=r["amount"],
+                category_id=r["category_id"], category_name=r["category_name"],
+            )
             for r in rows
         ]
         return CardTransactionsResponse(
             period_label=_make_period_label(period, date),
             transactions=transactions,
+        )
+
+    @router.patch("/transactions/{transaction_id}/category")
+    def set_transaction_category(transaction_id: int, payload: CategoryPatch):
+        conn = sqlite3.connect(db_path)
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.row_factory = sqlite3.Row
+        try:
+            cursor = conn.execute(
+                "UPDATE card_transactions SET category_id = ? WHERE id = ?",
+                [payload.category_id, transaction_id],
+            )
+            conn.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="取引が見つかりません")
+            row = conn.execute(
+                """SELECT ct.*, c.name AS category_name
+                   FROM card_transactions ct
+                   LEFT JOIN categories c ON ct.category_id = c.id
+                   WHERE ct.id = ?""",
+                [transaction_id],
+            ).fetchone()
+        finally:
+            conn.close()
+        return CardTransaction(
+            id=row["id"], date=row["date"], merchant=row["merchant"],
+            amount=row["amount"], category_id=row["category_id"],
+            category_name=row["category_name"],
         )
 
     @router.get("/months", response_model=list[str])

@@ -61,6 +61,14 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="transactions">取引一覧</button>
+    <button class="tab-btn" data-tab="analytics">分析</button>
+    <button class="tab-btn" data-tab="categories">カテゴリ管理</button>
+  </nav>
+
+  <div id="tab-transactions" class="tab-panel active">
+
   <div class="period-nav">
     <select id="period-select">
       <option value="all">全て</option>
@@ -108,10 +116,70 @@
             <th class="col-amount text-right">預入れ</th>
             <th>内容</th>
             <th class="text-right">残高</th>
+            <th>カテゴリ</th>
           </tr>
         </thead>
         <tbody id="bank-tbody"></tbody>
       </table>
+    </div>
+  </div><!-- /tab-transactions -->
+
+  <div id="tab-analytics" class="tab-panel hidden">
+    <div class="analytics-header">
+      <select id="analytics-month-select"></select>
+    </div>
+    <div class="analytics-grid">
+      <div class="analytics-card">
+        <h3>カテゴリ別支出（円グラフ）</h3>
+        <div id="breakdown-chart" style="height:300px;"></div>
+      </div>
+      <div class="analytics-card">
+        <h3>カテゴリ別推移（直近6ヶ月）</h3>
+        <div id="trends-chart" style="height:300px;"></div>
+      </div>
+    </div>
+    <div class="analytics-card" style="margin:0 16px 16px;">
+      <h3>収支バランスシート</h3>
+      <div id="balance-sheet-container"></div>
+    </div>
+    <div id="unclassified-warning" class="warning hidden"></div>
+  </div>
+
+  <div id="tab-categories" class="tab-panel hidden">
+    <div class="category-grid">
+      <div>
+        <h3>カテゴリ</h3>
+        <table id="categories-table">
+          <thead><tr><th>名前</th><th>種別</th><th></th></tr></thead>
+          <tbody id="categories-tbody"></tbody>
+        </table>
+        <form id="category-form" class="inline-form">
+          <input type="text" id="cat-name-input" placeholder="カテゴリ名" required>
+          <select id="cat-type-select">
+            <option value="expense">支出</option>
+            <option value="income">収入</option>
+            <option value="exclude">除外</option>
+          </select>
+          <button type="submit" class="btn">追加</button>
+        </form>
+      </div>
+      <div>
+        <h3>キーワードルール</h3>
+        <table id="rules-table">
+          <thead><tr><th>キーワード</th><th>カテゴリ</th><th>対象</th><th></th></tr></thead>
+          <tbody id="rules-tbody"></tbody>
+        </table>
+        <form id="rule-form" class="inline-form">
+          <input type="text" id="rule-keyword-input" placeholder="キーワード" required>
+          <select id="rule-category-select"></select>
+          <select id="rule-target-select">
+            <option value="both">両方</option>
+            <option value="bank">銀行のみ</option>
+            <option value="card">カードのみ</option>
+          </select>
+          <button type="submit" class="btn">追加</button>
+        </form>
+      </div>
     </div>
   </div>
 

@@ -277,14 +277,20 @@ def make_bank_router(db_path: str):
         conn.row_factory = sqlite3.Row
         try:
             card_rows = conn.execute(
-                "SELECT * FROM card_transactions WHERE date LIKE ? ORDER BY date ASC, id ASC",
+                """SELECT ct.*, c.name AS category_name
+                   FROM card_transactions ct
+                   LEFT JOIN categories c ON ct.category_id = c.id
+                   WHERE ct.date LIKE ? ORDER BY ct.date ASC, ct.id ASC""",
                 [f"{year_month}-%"],
             ).fetchall()
         finally:
             conn.close()
 
         transactions = [
-            CardTransaction(id=r["id"], date=r["date"], merchant=r["merchant"], amount=r["amount"])
+            CardTransaction(
+                id=r["id"], date=r["date"], merchant=r["merchant"], amount=r["amount"],
+                category_id=r["category_id"], category_name=r["category_name"],
+            )
             for r in card_rows
         ]
         return CardTransactionsResponse(

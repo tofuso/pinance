@@ -98,6 +98,9 @@ def test_get_card_details_returns_matching_month(client):
     data = res.json()
     assert len(data["transactions"]) == 2
     assert data["period_label"] == "2024年7月"
+    # category フィールドが含まれること
+    assert "category_id" in data["transactions"][0]
+    assert "category_name" in data["transactions"][0]
 
 def test_get_card_details_returns_404_for_missing_transaction(client):
     res = client.get("/api/bank/transactions/999/card-details")

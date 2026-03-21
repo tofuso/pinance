@@ -77,12 +77,15 @@ async function toggleCardDetails(tr, transactionId) {
     data.transactions.forEach(c => {
       const subTr = document.createElement('tr');
       subTr.classList.add('card-detail-row');
+      const catDisplay = c.category_name
+        ? `<button class="tx-category" onclick="openCategoryPicker(event, 'card', ${c.id}, this)">${c.category_name}</button>`
+        : `<button class="tx-category unclassified" onclick="openCategoryPicker(event, 'card', ${c.id}, this)">未分類</button>`;
       subTr.innerHTML = `
         <td class="card-detail-indent"></td>
         <td colspan="2" class="card-detail-merchant">${c.date}　${c.merchant}</td>
         <td></td>
         <td class="text-right amount-out">${c.amount.toLocaleString('ja-JP')}</td>
-        <td></td>`;
+        <td>${catDisplay}</td>`;
       subRows.push(subTr);
     });
   }

@@ -55,6 +55,32 @@
             <button id="card-delete-all-btn" class="btn btn-danger">全件削除</button>
           </div>
         </section>
+        <section class="modal-section">
+          <h3>AI自動分類設定</h3>
+          <div class="modal-row modal-row-label">
+            <label>プロバイダー</label>
+            <select id="ai-provider-select">
+              <option value="ollama">Ollama</option>
+              <option value="claude">Claude API</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+          <div class="modal-row modal-row-label">
+            <label>モデル名</label>
+            <input type="text" id="ai-model-input" placeholder="例: llama3.2">
+          </div>
+          <div class="modal-row modal-row-label">
+            <label>ベースURL</label>
+            <input type="text" id="ai-base-url-input" placeholder="例: http://localhost:11434">
+          </div>
+          <div class="modal-row modal-row-label">
+            <label>APIキー</label>
+            <input type="password" id="ai-api-key-input" placeholder="（Ollamaは不要）">
+          </div>
+          <div class="modal-row">
+            <button id="ai-settings-save-btn" class="btn">保存</button>
+          </div>
+        </section>
       </div>
     </div>
   </div>
@@ -180,6 +206,33 @@
           </select>
           <button type="submit" class="btn">追加</button>
         </form>
+      </div>
+    </div>
+
+    <div class="ai-classify-section">
+      <h3>AI自動分類</h3>
+      <div class="ai-classify-controls">
+        <button id="ai-suggest-btn" class="btn">未分類をAIで提案</button>
+        <span id="ai-suggest-status" class="ai-status"></span>
+      </div>
+      <div id="ai-suggestions-container" class="hidden">
+        <table id="ai-suggestions-table">
+          <thead>
+            <tr>
+              <th>種別</th>
+              <th>説明</th>
+              <th>提案カテゴリ</th>
+              <th>キーワード</th>
+              <th>信頼度</th>
+              <th>ルール化</th>
+              <th>適用</th>
+            </tr>
+          </thead>
+          <tbody id="ai-suggestions-tbody"></tbody>
+        </table>
+        <div class="ai-apply-controls">
+          <button id="ai-apply-all-btn" class="btn">チェック済みを一括適用</button>
+        </div>
       </div>
     </div>
   </div>

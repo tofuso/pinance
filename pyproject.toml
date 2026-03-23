@@ -10,12 +10,12 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "python-multipart",
+    "httpx",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
-    "httpx",
 ]
 
 [tool.setuptools.packages.find]

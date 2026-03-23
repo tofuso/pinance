@@ -345,6 +345,7 @@ const settingsModal = document.getElementById('settings-modal');
 document.getElementById('settings-btn').addEventListener('click', () => {
   settingsModal.classList.remove('hidden');
   refreshModalMonths();
+  loadAiSettings();
 });
 
 document.getElementById('modal-close-btn').addEventListener('click', () => {
@@ -671,3 +672,144 @@ async function openCategoryPicker(event, source, txId, btn) {
   picker.focus();
   document.addEventListener('click', () => picker.remove(), {once: true});
 }
+
+// ===== AI設定UI =====
+
+async function loadAiSettings() {
+  const res = await fetch('/api/settings');
+  if (!res.ok) return;
+  const data = await res.json();
+  document.getElementById('ai-provider-select').value = data.llm_provider || 'ollama';
+  document.getElementById('ai-model-input').value = data.llm_model || '';
+  document.getElementById('ai-base-url-input').value = data.llm_base_url || '';
+  document.getElementById('ai-api-key-input').value = data.llm_api_key || '';
+}
+
+document.getElementById('ai-settings-save-btn').addEventListener('click', async () => {
+  const payload = {
+    llm_provider: document.getElementById('ai-provider-select').value,
+    llm_model: document.getElementById('ai-model-input').value,
+    llm_base_url: document.getElementById('ai-base-url-input').value,
+    llm_api_key: document.getElementById('ai-api-key-input').value,
+  };
+  const res = await fetch('/api/settings', {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (res.ok) showToast('AI設定を保存しました');
+  else showToast('AI設定の保存に失敗しました', true);
+});
+
+// ===== AI分類UI =====
+
+let aiSuggestions = [];
+
+document.getElementById('ai-suggest-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('ai-suggest-btn');
+  const status = document.getElementById('ai-suggest-status');
+  btn.disabled = true;
+  status.textContent = '提案を取得中...';
+  try {
+    const res = await fetch('/api/ai/suggest', {method: 'POST'});
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    aiSuggestions = await res.json();
+    renderAiSuggestions(aiSuggestions);
+    status.textContent = `${aiSuggestions.length}件の提案`;
+    if (aiSuggestions.length === 0) {
+      document.getElementById('ai-suggestions-container').classList.add('hidden');
+    }
+  } catch(e) {
+    status.textContent = '取得に失敗しました';
+    showToast(`AI提案エラー: ${e.message}`, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderAiSuggestions(suggestions) {
+  const tbody = document.getElementById('ai-suggestions-tbody');
+  tbody.innerHTML = '';
+  const container = document.getElementById('ai-suggestions-container');
+  if (suggestions.length === 0) { container.classList.add('hidden'); return; }
+  container.classList.remove('hidden');
+
+  // datalist 更新（既存カテゴリ名補完用）
+  let datalist = document.getElementById('ai-cat-datalist');
+  if (!datalist) {
+    datalist = document.createElement('datalist');
+    datalist.id = 'ai-cat-datalist';
+    document.body.appendChild(datalist);
+  }
+  datalist.innerHTML = allCategories.map(c => `<option value="${escHtml(c.name)}">`).join('');
+
+  suggestions.forEach((s, idx) => {
+    if (!s.suggested_category_name) return; // 提案なしはスキップ
+    const tr = document.createElement('tr');
+    tr.dataset.idx = idx;
+    // キーワードは取引名をデフォルトとして表示（ユーザーが短縮可能）
+    const defaultKeyword = s.description;
+    tr.innerHTML = `
+      <td>${s.transaction_type === 'bank' ? '銀行' : 'カード'}</td>
+      <td class="ai-desc" title="${escHtml(s.description)}">${escHtml(s.description)}</td>
+      <td>
+        <input type="text" class="ai-cat-input" list="ai-cat-datalist"
+               value="${escHtml(s.suggested_category_name)}"
+               placeholder="カテゴリ名">
+      </td>
+      <td><input type="text" class="ai-keyword-input" value="${escHtml(defaultKeyword)}"></td>
+      <td>${Math.round(s.confidence * 100)}%</td>
+      <td><input type="checkbox" class="ai-rule-check" checked></td>
+      <td><input type="checkbox" class="ai-apply-check" checked></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+document.getElementById('ai-apply-all-btn').addEventListener('click', async () => {
+  const rows = document.querySelectorAll('#ai-suggestions-tbody tr');
+  const payload = [];
+  rows.forEach(tr => {
+    if (!tr.querySelector('.ai-apply-check').checked) return;
+    const idx = parseInt(tr.dataset.idx);
+    const s = aiSuggestions[idx];
+    if (!s) return;
+    const catName = tr.querySelector('.ai-cat-input').value.trim();
+    if (!catName) return;
+    // 既存カテゴリならIDを、新規ならnameだけ渡して自動作成させる
+    const existingCat = allCategories.find(c => c.name === catName);
+    const createRule = tr.querySelector('.ai-rule-check').checked;
+    const keyword = tr.querySelector('.ai-keyword-input').value.trim();
+    payload.push({
+      transaction_id: s.transaction_id,
+      transaction_type: s.transaction_type,
+      category_id: existingCat ? existingCat.id : null,
+      category_name: existingCat ? null : catName,
+      category_type: 'expense',
+      create_rule: createRule && !!keyword,
+      keyword: keyword || null,
+      rule_target: 'both',
+    });
+  });
+  if (payload.length === 0) { showToast('適用する項目がありません'); return; }
+  const res = await fetch('/api/ai/apply', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) { showToast('適用に失敗しました', true); return; }
+  const data = await res.json();
+  showToast(`${data.applied}件適用、${data.rules_created}件ルール作成`);
+  document.getElementById('ai-suggestions-container').classList.add('hidden');
+  aiSuggestions = [];
+  document.getElementById('ai-suggest-status').textContent = '';
+  loadAll();
+  loadCategories();
+});

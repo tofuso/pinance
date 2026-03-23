@@ -7,6 +7,8 @@ from pinance.routers.bank import make_bank_router
 from pinance.routers.card import make_card_router
 from pinance.routers.categories import make_categories_router
 from pinance.routers.analytics import make_analytics_router
+from pinance.routers.settings import make_settings_router
+from pinance.routers.ai import make_ai_router
 
 
 def create_app(db_path: str = DEFAULT_DB_PATH) -> FastAPI:
@@ -16,6 +18,8 @@ def create_app(db_path: str = DEFAULT_DB_PATH) -> FastAPI:
     app.include_router(make_card_router(db_path))
     app.include_router(make_categories_router(db_path))
     app.include_router(make_analytics_router(db_path))
+    app.include_router(make_settings_router(db_path))
+    app.include_router(make_ai_router(db_path))
 
     static_dir = os.path.join(os.path.dirname(__file__), "static")
 

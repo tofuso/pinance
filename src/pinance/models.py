@@ -104,3 +104,42 @@ class BalanceSheet(BaseModel):
     total_expense: int
     net: int
     unclassified_count: int
+
+# --- LLM設定モデル ---
+
+class LlmSettings(BaseModel):
+    llm_provider: str
+    llm_model: str
+    llm_base_url: str
+    llm_api_key: str
+
+class LlmSettingsPatch(BaseModel):
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+
+# --- AI分類モデル ---
+
+class AiClassificationSuggestion(BaseModel):
+    transaction_id: int
+    transaction_type: str  # "bank" | "card"
+    description: str
+    suggested_category_id: int | None
+    suggested_category_name: str | None
+    suggested_keyword: str | None
+    confidence: float
+
+class AiClassificationApply(BaseModel):
+    transaction_id: int
+    transaction_type: str  # "bank" | "card"
+    category_id: int | None = None        # 既存カテゴリのID
+    category_name: str | None = None      # 新規カテゴリ名（category_id が None の場合に使用）
+    category_type: str = "expense"        # 新規カテゴリの種別
+    create_rule: bool = False
+    keyword: str | None = None
+    rule_target: str = "both"
+
+class AiClassificationResult(BaseModel):
+    applied: int
+    rules_created: int

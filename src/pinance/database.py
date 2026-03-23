@@ -47,6 +47,11 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
                         CHECK(target IN ('bank', 'card', 'both')),
             UNIQUE(keyword, target)
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     """)
 
     # 既存テーブルに category_id 列を追加（既存 DB のマイグレーション）
@@ -63,5 +68,16 @@ def init_db(db_path: str = DEFAULT_DB_PATH) -> None:
         """INSERT OR IGNORE INTO category_rules (keyword, category_id, target)
            SELECT 'ﾐﾂｲｽﾐﾄﾓｶ-ﾄﾞ', id, 'bank' FROM categories WHERE name = 'カード引き落とし'"""
     )
+    # シードデータ：LLM設定のデフォルト値
+    for key, value in [
+        ("llm_provider", "ollama"),
+        ("llm_model", "gemma3:4b-it-qat"),
+        ("llm_base_url", "http://localhost:11434"),
+        ("llm_api_key", ""),
+    ]:
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)",
+            [key, value],
+        )
     conn.commit()
     conn.close()

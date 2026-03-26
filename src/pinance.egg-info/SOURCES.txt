@@ -1,6 +1,7 @@
 README.md
 pyproject.toml
 src/pinance/__init__.py
+src/pinance/classifier.py
 src/pinance/database.py
 src/pinance/main.py
 src/pinance/models.py
@@ -14,10 +15,14 @@ src/pinance/parsers/__init__.py
 src/pinance/parsers/smbc.py
 src/pinance/parsers/vpass.py
 src/pinance/routers/__init__.py
+src/pinance/routers/analytics.py
 src/pinance/routers/bank.py
 src/pinance/routers/card.py
+src/pinance/routers/categories.py
+tests/test_analytics_router.py
 tests/test_bank_router.py
 tests/test_card_router.py
+tests/test_categories_router.py
 tests/test_database.py
 tests/test_smbc_parser.py
 tests/test_vpass_parser.py

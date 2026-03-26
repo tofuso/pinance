@@ -5,6 +5,6 @@ Requires-Python: >=3.12
 Requires-Dist: fastapi
 Requires-Dist: uvicorn[standard]
 Requires-Dist: python-multipart
+Requires-Dist: httpx
 Provides-Extra: dev
 Requires-Dist: pytest; extra == "dev"
-Requires-Dist: httpx; extra == "dev"

@@ -3,8 +3,8 @@ let chartInstance = null;
 let activeChartType = 'bar';
 
 const state = {
-  period: 'month',
-  date: currentDateForPeriod('month'),
+  period: 'all',
+  date: null,
 };
 
 function currentDateForPeriod(period) {
@@ -392,6 +392,7 @@ document.getElementById('card-delete-all-btn').addEventListener('click', async (
 });
 
 // 初期ロード
+document.querySelectorAll('#prev-btn, #next-btn').forEach(b => b.style.visibility = 'hidden');
 loadAll();
 
 // ===== タブ切り替え =====
@@ -541,7 +542,7 @@ async function loadBreakdownAndBalanceSheet(ym) {
     renderBreakdownChart(bk);
     const warning = document.getElementById('unclassified-warning');
     if (bk.unclassified_count > 0) {
-      warning.textContent = `${bk.unclassified_count}件の取引が未分類です。カテゴリ管理タブでルールを設定するか、取引一覧から手動で分類してください。`;
+      warning.textContent = `${bk.unclassified_count}件の取引が未分類です（分析では「未分類」として集計されています）。カテゴリ管理タブでルールを設定するか、取引一覧から手動で分類してください。`;
       warning.classList.remove('hidden');
     } else {
       warning.classList.add('hidden');

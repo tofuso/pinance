@@ -63,6 +63,12 @@ def make_analytics_router(db_path: str):
             card_null_count = conn.execute(
                 f"SELECT COUNT(*) FROM card_transactions ct {cd_null}", cd_p
             ).fetchone()[0]
+            bank_null_amount = conn.execute(
+                f"SELECT COALESCE(SUM(bt.withdrawal), 0) FROM bank_transactions bt {bk_null}", bk_p
+            ).fetchone()[0]
+            card_null_amount = conn.execute(
+                f"SELECT COALESCE(SUM(ct.amount), 0) FROM card_transactions ct {cd_null}", cd_p
+            ).fetchone()[0]
         finally:
             conn.close()
 
@@ -74,6 +80,9 @@ def make_analytics_router(db_path: str):
             [AnalyticsBreakdownItem(category=k, amount=v) for k, v in totals.items()],
             key=lambda x: -x.amount,
         )
+        null_amount = bank_null_amount + card_null_amount
+        if null_amount > 0:
+            items.append(AnalyticsBreakdownItem(category="未分類", amount=null_amount))
         return AnalyticsBreakdown(
             period_label=_make_period_label(period, date),
             items=items,
@@ -116,7 +125,7 @@ def make_analytics_router(db_path: str):
             cat_rows = conn.execute(
                 "SELECT id, name FROM categories WHERE type = 'expense' ORDER BY name ASC"
             ).fetchall()
-            category_names = [r["name"] for r in cat_rows]
+            category_names = [r["name"] for r in cat_rows] + ["未分類"]
 
             data: dict[str, list[int]] = {name: [0] * months for name in category_names}
             unclassified_count = 0
@@ -142,14 +151,25 @@ def make_analytics_router(db_path: str):
                     if r["category"] in data:
                         data[r["category"]][i] += r["amount"]
 
-                unclassified_count += conn.execute(
+                null_bk_count = conn.execute(
                     "SELECT COUNT(*) FROM bank_transactions WHERE category_id IS NULL AND date LIKE ?",
                     [f"{ym}-%"],
                 ).fetchone()[0]
-                unclassified_count += conn.execute(
+                null_cd_count = conn.execute(
                     "SELECT COUNT(*) FROM card_transactions WHERE category_id IS NULL AND date LIKE ?",
                     [f"{ym}-%"],
                 ).fetchone()[0]
+                unclassified_count += null_bk_count + null_cd_count
+
+                null_bk_amount = conn.execute(
+                    "SELECT COALESCE(SUM(withdrawal), 0) FROM bank_transactions WHERE category_id IS NULL AND date LIKE ?",
+                    [f"{ym}-%"],
+                ).fetchone()[0]
+                null_cd_amount = conn.execute(
+                    "SELECT COALESCE(SUM(amount), 0) FROM card_transactions WHERE category_id IS NULL AND date LIKE ?",
+                    [f"{ym}-%"],
+                ).fetchone()[0]
+                data["未分類"][i] += null_bk_amount + null_cd_amount
         finally:
             conn.close()
 
@@ -205,6 +225,15 @@ def make_analytics_router(db_path: str):
             card_null_count = conn.execute(
                 f"SELECT COUNT(*) FROM card_transactions ct {cd_null}", cd_p
             ).fetchone()[0]
+            null_income_amount = conn.execute(
+                f"SELECT COALESCE(SUM(bt.deposit), 0) FROM bank_transactions bt {bk_null}", bk_p
+            ).fetchone()[0]
+            null_bk_expense_amount = conn.execute(
+                f"SELECT COALESCE(SUM(bt.withdrawal), 0) FROM bank_transactions bt {bk_null}", bk_p
+            ).fetchone()[0]
+            null_cd_expense_amount = conn.execute(
+                f"SELECT COALESCE(SUM(ct.amount), 0) FROM card_transactions ct {cd_null}", cd_p
+            ).fetchone()[0]
         finally:
             conn.close()
 
@@ -216,10 +245,17 @@ def make_analytics_router(db_path: str):
             [BalanceSheetItem(category=r["category"], amount=r["amount"]) for r in income_rows],
             key=lambda x: -x.amount,
         )
+        if null_income_amount > 0:
+            income.append(BalanceSheetItem(category="未分類", amount=null_income_amount))
+
         expense = sorted(
             [BalanceSheetItem(category=k, amount=v) for k, v in expense_totals.items()],
             key=lambda x: -x.amount,
         )
+        null_expense_amount = null_bk_expense_amount + null_cd_expense_amount
+        if null_expense_amount > 0:
+            expense.append(BalanceSheetItem(category="未分類", amount=null_expense_amount))
+
         total_income = sum(i.amount for i in income)
         total_expense = sum(e.amount for e in expense)
         return BalanceSheet(
